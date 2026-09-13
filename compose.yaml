@@ -1,0 +1,43 @@
+# 黑心云 · Xboard 部署编排
+#
+# 与上游 compose.sample.yaml 的三处差异，都是刻意为之：
+#   1. ports 只绑 127.0.0.1  —— 不暴露公网。同机部署（与其他服务共存）时必须
+#   2. RESOURCE_PROFILE=minimal —— 不抢占同机其他服务的 CPU/内存
+#   3. build 段 —— 从本仓库构建镜像，仓库里的代码改动才会生效
+#
+# 用法见 DEPLOY.md，或直接跑：bash install.sh
+
+services:
+  xboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # 镜像构建时，容器内会 git clone 这个仓库的这个分支
+        REPO_URL: https://github.com/HaydenSmith1121/xboard-heixinyun
+        BRANCH_NAME: master
+        # 让 Docker 重新 clone 最新代码而不是复用旧缓存层。
+        # 每次构建换一个值（install.sh 会自动填时间戳）。
+        CACHEBUST: "${CACHEBUST:-1}"
+    image: xboard-heixinyun:local
+    restart: unless-stopped
+    ports:
+      # 格式：<宿主绑定地址>:<宿主端口>:<容器端口>
+      # 绑 127.0.0.1 表示只有本机能连，公网访问不到。
+      - "127.0.0.1:7001:7001"
+    volumes:
+      # .env 必须是「文件」。不存在时 Docker 会创建成目录，安装会直接失败。
+      - ./.env:/www/.env
+      - ./.docker/.data/:/www/.docker/.data
+      - ./storage/logs:/www/storage/logs
+      - ./storage/theme:/www/storage/theme
+      - ./plugins:/www/plugins
+      - redis-data:/data
+    environment:
+      # minimal | balanced | performance | auto
+      - RESOURCE_PROFILE=minimal
+      - ENABLE_HORIZON=true
+      - docker=true
+
+volumes:
+  redis-data:
